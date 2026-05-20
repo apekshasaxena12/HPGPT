@@ -1,0 +1,59 @@
+# === Web Frameworks ===
+flask
+fastapi
+flask-socketio
+python-socketio
+python-multipart
+uvicorn
+websockets
+werkzeug
+requests
+
+# === Template Engine ===
+jinja2
+markupsafe
+
+# === WSGI Server ===
+gunicorn
+
+# === Environment Management ===
+python-dotenv
+
+# === Security & Sessions ===
+itsdangerous
+
+# === File Handling & Utilities ===
+click
+watchdog
+aiofiles
+pillow
+openpyxl
+pandas
+pdfplumber
+pypdf2
+python-docx
+
+# === Database & ORM ===
+sqlalchemy
+databases
+asyncpg
+aiosqlite
+psycopg2-binary
+
+# === LangChain & Ecosystem ===
+langchain
+langchain-core
+langchain-community
+langgraph
+langgraph-checkpoint-sqlite
+faiss-cpu
+
+# === LLMs & Agents ===
+google-generativeai
+langchain-google-genai
+groq
+duckduckgo-search
+pyautogen
+black
+plotly
+matplotlib

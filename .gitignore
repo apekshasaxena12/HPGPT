@@ -1,0 +1,42 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+env/
+venv/
+.venv/
+
+.env
+# ignore all env files EXCEPT example.env
+*.env
+!example.env
+
+# Editor config
+.vscode/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node/React (if used)
+node_modules/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+venv/
+__pycache__/
+*.pyc
+.env
+sessions.json
+conversations.json
+feedback.json
+uploads/
+rag_uploads/
+*.db
+.webui_secret_key

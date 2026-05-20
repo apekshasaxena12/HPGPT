@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HPGPT - Your AI Assistant for HPCL</title>
+
+    <!-- Main CSS -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles1.css') }}"
+    />
+
+    <!-- Spline Robot Viewer -->
+    <script
+      type="module"
+      src="https://unpkg.com/@splinetool/viewer@1.10.26/build/spline-viewer.js"
+    ></script>
+  </head>
+  <body class="gradient-sides">
+    <!-- Spline 3D Robot -->
+    <spline-viewer
+      url="https://prod.spline.design/Kos9n4OjllWwFPvt/scene.splinecode"
+      id="robot-background"
+      events-target="global"
+      loading="eager"
+    >
+    </spline-viewer>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+      <div class="nav-left">
+        <span class="brand-name">HPGPT</span>
+      </div>
+      <div class="nav-right">
+        <a
+          href="https://www.hindustanpetroleum.com/"
+          target="_blank"
+          class="nav-link"
+          >About Us</a
+        >
+      </div>
+    </nav>
+
+    <!-- HPCL Logo -->
+    <div class="logo-section">
+      <img
+        src="{{ url_for('static', filename='images/hpcl-full-logo.png') }}"
+        alt="HPCL Logo"
+        class="main-logo"
+      />
+    </div>
+
+    <!-- Hero Section -->
+    <div class="hero">
+      <h1 class="main-title">
+        <span>Welcome</span> <span>to</span><br />
+        <span>the</span> <span class="hp-highlight">HPGPT</span>
+        <span>era</span>
+      </h1>
+
+      <p class="subtitle">
+        Your AI Assistant for HPCL. Upload Documents, ask questions or<br />
+        get help with analytics.
+      </p>
+
+      <div class="buttons">
+        <a href="{{ url_for('login') }}" class="btn login-btn">Login</a>
+        <a href="{{ url_for('signup') }}" class="btn signup-btn">Sign Up</a>
+      </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='main1.js') }}"></script>
+  </body>
+</html>

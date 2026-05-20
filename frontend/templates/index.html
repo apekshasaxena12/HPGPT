@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HPGPT - HPCL AI Assistant</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism.css"
+      rel="stylesheet"
+    />
+
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/prism.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-java.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-cpp.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-c.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <!-- ✅ Add this -->
+
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <img
+            src="{{ url_for('static', filename='icons/hpcl_logo.png') }}"
+            alt="HPCL Logo"
+          />
+          <h2>HPGPT</h2>
+        </div>
+
+        <div class="top-button-container">
+          <div class="top-button-group">
+            <a
+              href="{{ voice_bot_url }}"
+              class="white-chat-btn"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Voice Chat</a
+            >
+            <a
+              href="{{ doc_gen_url }}"
+              class="white-chat-btn"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Document Generator</a
+            >
+          </div>
+        </div>
+
+        <div class="agent-selector hidden">
+  <label for="agent-type" class="visually-hidden">Select Agent:</label>
+  <select id="agent-type">
+    <option value="general">General Assistant</option>
+    <option value="document">Document Agent</option>
+    <option value="analytics">Analytics Agent</option>
+    <option value="websearch">Websearch Agent</option>
+    <option value="coding">Coding Agent</option>
+  </select>
+</div>
+
+
+        <!-- New chat button now appears SECOND -->
+        <button id="new-chat-btn" class="new-chat-btn">
+          <span>+</span> New Chat
+        </button>
+
+        <div class="chat-history" id="chat-history">
+          <div class="chat-inner">
+            <!-- Chat sessions will be loaded here -->
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="settings">
+            <label for="context-limit">Display Messages:</label>
+            <input
+              type="number"
+              id="context-limit"
+              value="10"
+              min="1"
+              max="50"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Chat Area -->
+      <div class="chat-container">
+        <div class="chat-header">
+          <h3 id="chat-title">Welcome to HPGPT</h3>
+
+          <!-- Answer Mode Toggle -->
+          <div class="answer-mode-toggle">
+            <span class="toggle-label">Answer Mode:</span>
+            <div class="toggle-switch">
+              <input
+                type="checkbox"
+                id="answer-mode-toggle"
+                class="toggle-input"
+              />
+              <label for="answer-mode-toggle" class="toggle-slider">
+                <span class="toggle-option left">Specific</span>
+                <span class="toggle-option right">Detailed</span>
+              </label>
+            </div>
+            <form action="/logout" method="GET">
+              <button type="submit" class="logout-btn">Logout</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+          <div class="welcome-message">
+            <h2>Welcome to HPGPT</h2>
+            <p>
+              Your AI assistant for HPCL. Upload documents, ask questions, or
+              get help with analytics.
+            </p>
+          </div>
+        </div>
+
+        <div class="input-container">
+          <div class="file-upload-area" id="file-upload-area">
+            <!-- File uploads will appear here -->
+          </div>
+
+          <div class="input-area">
+            <label for="file-input" class="file-upload-btn">
+              <img
+                src="{{ url_for('static', filename='icons/upload.png') }}"
+                alt="Upload"
+              />
+            </label>
+            <input
+              type="file"
+              id="file-input"
+              multiple
+              accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.csv"
+            />
+
+            <input
+              type="text"
+              id="message-input"
+              placeholder="Ask me anything about your documents or HPCL..."
+            />
+
+            <button id="send-btn" class="send-btn">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  </body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - HPGPT</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles1.css') }}">
+</head>
+<body class="login-body gradient-sides-login">
+    <!-- Top Navigation -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <span class="brand-name">HPGPT</span>
+        </div>
+        <div class="nav-right">
+            <a href="https://www.hindustanpetroleum.com/" target="_blank" class="nav-link">About Us</a>
+        </div>
+    </nav>
+
+    <!-- Login Container -->
+    <div class="login-container">
+        <img src="{{ url_for('static', filename='images/hpcl-full-logo.png') }}" alt="HPCL Logo" class="logo-small">
+
+        <h2 class="form-title">Login to Your Account</h2>
+
+        <form class="glass-form" method="POST" action="/login">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit" class="btn login-btn">Login</button>
+        </form>
+
+        {% if error %}
+            <div style="text-align:center; color:red; margin-top: 15px; margin-bottom:10px;">
+                {{ error }}
+            </div>
+        {% endif %}
+
+        <div class="alt-link" style="margin-top: 20px;">
+            Don't have an account? <a href="{{ url_for('signup') }}">Sign Up</a>
+        </div>
+    </div>
+</body>
+</html>
