@@ -3,7 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import json
+<<<<<<< HEAD
 from pathlib import Path
+=======
+>>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 import uuid
 import os
 import aiofiles
@@ -15,10 +18,13 @@ from typing import Dict
 import asyncio
 from urllib.parse import parse_qs
 from dotenv import load_dotenv
+<<<<<<< HEAD
 from backend.agents.collections_agent import suggest_category, save_document_to_collection, list_documents, CATEGORIES
 from backend.agents.collections_rag import index_document, query_collections, rebuild_index_from_disk
 
 
+=======
+>>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 
 # Load environment variables
 load_dotenv()
@@ -53,15 +59,23 @@ class FeedbackData(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
+<<<<<<< HEAD
     os.makedirs("uploads", exist_ok=True)
     rebuild_index_from_disk()
+=======
+    # Startup
+    os.makedirs("uploads", exist_ok=True)
+>>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
     await database.connect()
     logger.info("hpGPT Backend started successfully")
     yield  # Application runs here
     # Shutdown
     await database.disconnect()
     logger.info("hpGPT Backend shutting down")
+<<<<<<< HEAD
     
+=======
+>>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 
 app = FastAPI(
     title="hpGPT Backend", 
@@ -595,6 +609,7 @@ if __name__ == "__main__":
         port=8000,
         log_level="info",
         reload=True
+<<<<<<< HEAD
     )
 
 @app.get("/collections/structure")
@@ -822,3 +837,6 @@ async def delete_collections_history_entry(entry_id: str):
         return {"success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+=======
+    )
+>>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97

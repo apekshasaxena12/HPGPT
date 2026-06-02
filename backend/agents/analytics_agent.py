@@ -28,7 +28,11 @@ class AnalyticsAgent(AssistantAgent):
             system_message="You are a data analytics expert who writes Python code using pandas and Plotly."
         )
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+<<<<<<< HEAD
         self.model = genai.GenerativeModel("gemini-2.5-flash") 
+=======
+        self.model = genai.GenerativeModel("gemini-2.5-flash-lite") 
+>>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 
     def extract_code(self, text: str) -> str:
         cleaned = text.strip()
@@ -43,10 +47,13 @@ class AnalyticsAgent(AssistantAgent):
         raw_code,
         flags=re.DOTALL | re.MULTILINE)
         raw_code = re.sub(r'^\s*\)\s*$', '', raw_code, flags=re.MULTILINE)
+<<<<<<< HEAD
         open_count = raw_code.count('(')
         close_count = raw_code.count(')')
         if open_count > close_count:
             raw_code += ')' * (open_count - close_count)
+=======
+>>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
         return raw_code
 
     def generate_code_and_summary(self, df_sample: pd.DataFrame, sample_csv: str, columns: list, stats: str, user_prompt: str):

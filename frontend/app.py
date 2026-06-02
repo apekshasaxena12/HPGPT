@@ -151,6 +151,7 @@ def health_check():
         'backend': 'FastAPI'
     }
 
+<<<<<<< HEAD
 @app.route('/collections')
 def collections():
     login_session_id = request.cookies.get("login_session_id")
@@ -158,5 +159,7 @@ def collections():
         return redirect(url_for('login'))
     return render_template('collections.html')
 
+=======
+>>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
