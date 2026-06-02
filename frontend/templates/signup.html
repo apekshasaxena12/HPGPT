@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - HPGPT</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles1.css') }}">
+</head>
+<body class="login-body gradient-sides-login">
+    <!-- Top Navigation -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <span class="brand-name">HPGPT</span>
+        </div>
+        <div class="nav-right">
+            <a href="https://www.hindustanpetroleum.com/" target="_blank" class="nav-link">About Us</a>
+        </div>
+    </nav>
+
+    <!-- Signup Container -->
+    <div class="login-container">
+        <img src="{{ url_for('static', filename='images/hpcl-full-logo.png') }}" alt="HPCL Logo" class="logo-small">
+
+        <h2 class="form-title">Create Your Account</h2>
+
+        <form class="glass-form" id="signupForm">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="email" name="email" placeholder="Email Address" required>
+            <input type="password" name="password" placeholder="Password" id="password" required>
+            <input type="password" name="confirm_password" placeholder="Confirm Password" id="confirm_password" required>
+            <button type="submit" class="btn signup-btn">Sign Up</button>
+        </form>
+
+        <div id="signupMessage" style="text-align:center; color:white; margin-top:10px;"></div>
+
+        <div class="alt-link">
+            Already have an account? <a href="{{ url_for('login') }}">Login</a>
+        </div>
+    </div>
+
+    <!-- Signup JS -->
+    <script>
+        document.getElementById("signupForm").addEventListener("submit", handleSignup);
+
+        async function handleSignup(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            const messageDiv = document.getElementById("signupMessage");
+
+            // Clear message
+            messageDiv.innerText = "";
+
+            // Password match check
+            if (data.password !== data.confirm_password) {
+                messageDiv.style.color = "red";
+                messageDiv.innerText = "Passwords do not match.";
+                return;
+            }
+
+            try {
+                const response = await fetch("http://localhost:8000/signup", {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json"
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    messageDiv.style.color = "lightgreen";
+                    messageDiv.innerText = result.message || "Signup successful!";
+                    setTimeout(() => {
+                        window.location.href = "{{ url_for('login') }}";
+                    }, 2000);
+                } else {
+                    messageDiv.style.color = "red";
+                    messageDiv.innerText = result.message || "Signup failed.";
+                }
+            } catch (error) {
+                messageDiv.style.color = "red";
+                messageDiv.innerText = "Signup failed. Please try again later.";
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>

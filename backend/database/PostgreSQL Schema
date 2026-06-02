@@ -1,0 +1,85 @@
+-- 1. USERS TABLE
+CREATE TABLE users (
+    userid SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. CHATS TABLE
+CREATE TABLE chats (
+    chatid UUID PRIMARY KEY,
+    userid INTEGER NOT NULL,
+    chatname VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (userid) REFERENCES users(userid) ON DELETE CASCADE
+);
+
+
+-- 3. AGENTS TABLE
+CREATE TABLE agents (
+    agentid SERIAL PRIMARY KEY,
+    agentname VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    capabilities TEXT
+);
+
+-- 4. MESSAGES TABLE
+CREATE TABLE messages (
+    msgid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    chatid UUID NOT NULL,
+    sendertype VARCHAR(10) CHECK (sendertype IN ('user', 'assistant')) NOT NULL,
+    agentid INTEGER,
+    content TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chatid) REFERENCES chats(chatid) ON DELETE CASCADE,
+    FOREIGN KEY (agentid) REFERENCES agents(agentid) ON DELETE SET NULL
+);
+
+-- 5. FEEDBACK TABLE
+CREATE TABLE feedback (
+    feedbackid UUID PRIMARY KEY,
+    chatid UUID NOT NULL,
+    userid INTEGER NOT NULL,
+    agentid INTEGER,
+    feedback_type VARCHAR(10) CHECK (feedback_type IN ('positive', 'negative')) NOT NULL,
+    answer_mode VARCHAR(10) CHECK (answer_mode IN ('specific', 'detailed')) NOT NULL,
+    msg_length INTEGER,
+    msg_content TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chatid) REFERENCES chats(chatid) ON DELETE CASCADE,
+    FOREIGN KEY (userid) REFERENCES users(userid) ON DELETE CASCADE,
+    FOREIGN KEY (agentid) REFERENCES agents(agentid) ON DELETE SET NULL
+);
+
+    
+
+-- 6. SESSIONS TABLE
+CREATE TABLE sessions (
+    sessionid UUID PRIMARY KEY DEFAULT gen_random_uuid(),  -- Unique session ID
+    userid INTEGER NOT NULL REFERENCES users(userid) ON DELETE CASCADE,  -- Linked user
+    user_agent TEXT,                   -- Browser/device info
+    ip_address INET,                   -- Client IP address
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,               -- Session expiration time
+    is_active BOOLEAN DEFAULT TRUE     -- Whether session is currently valid
+);
+
+-- USERS
+INSERT INTO users (username, email, password) VALUES 
+('abc', 'abc@gmail.com', 'abc'),
+('charith', 'charith@gmail.com', 'pass1'),
+('hello', 'hello@gmail.com', 'pass2'),
+('admin', 'admin@gmail.com', 'admin');
+
+
+-- AGENTS
+INSERT INTO agents (agentname, description, capabilities) VALUES
+('GeneralAssistant', 'Handles general queries', 'Conversational help, summaries'),
+('CodingAgent', 'Handles programming tasks', 'Code generation, debugging'),
+('AnalyticsAgent', 'Performs data analysis', 'Pandas, plots, stats'),
+('WebsearchAgent', 'Fetches web-based info', 'Web search, summarization'),
+('DocumentAgent', 'Processes files like PDFs', 'Summarization, OCR, metadata');
+
