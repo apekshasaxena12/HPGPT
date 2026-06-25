@@ -50,34 +50,53 @@ HPGPT/
 │── backend/
 │   ├── agents/
 │   │   ├── rag_api/
-│   │   │   ├── rag_server.py     # Local RAG server (NEW)
+│   │   │   ├── rag_server.py     # Local RAG server
 │   │   │   ├── summarize.py      # Summarization client
 │   │   │   ├── query.py          # Query client
 │   │   │   └── compare.py        # Comparison client
+│   │   ├── agents.py             # Agent dispatcher
 │   │   ├── analytics_agent.py
-│   │   ├── coding_agent.py       # Fixed language detection
-│   │   ├── document_agent.py     # Fixed routing + answer_mode support
+│   │   ├── coding_agent.py
+│   │   ├── collections_agent.py  # Collections category management
+│   │   ├── collections_rag.py    # FAISS-based collections Q&A
+│   │   ├── document_agent.py
+│   │   ├── general_agent.py
 │   │   ├── websearch_agent.py
 │   │   └── database_agent.py
 │   │
 │   ├── utils/
 │   │   ├── groq_client.py
-│   │   ├── langgraph_manager.py  # Fixed delete_session return value
-│   │   ├── langgraph_pipeline.py # Fixed answer_mode passthrough
+│   │   ├── langgraph_manager.py
+│   │   ├── langgraph_pipeline.py
 │   │   ├── file_processor.py
+│   │   ├── file_uploader.py
 │   │   └── file_utils.py
 │   │
 │   ├── database/
 │   │   ├── db_manager.py
 │   │   └── auth.py
 │   │
-│   └── main.py                   # Added /sessions/{id}/rename endpoint
+│   └── main.py
 │
 │── frontend/
 │   ├── app.py
-│   ├── templates/index.html
-│   ├── static/js/main.js         # Copy button, rename, newline rendering fixes
-│   └── static/css/styles.css
+│   ├── templates/
+│   │   ├── index.html
+│   │   ├── homepage.html
+│   │   ├── collections.html
+│   │   ├── login.html
+│   │   └── signup.html
+│   └── static/
+│       ├── js/
+│       │   └── main.js
+│       ├── css/
+│       │   └── styles.css
+│       ├── icons/
+│       ├── images/
+│       ├── fonts/
+│       ├── main1.js
+│       ├── styles1.css
+│       └── particles1.json
 │
 │── requirements.txt
 │── example.env
@@ -113,7 +132,6 @@ source venv/bin/activate
 ### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
-pip install langchain-text-splitters sentence-transformers google-genai
 ```
 
 ### 4. Configure Environment
@@ -125,6 +143,9 @@ TAVILY_API_KEY=your_tavily_api_key
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/hpgpt_db
 API_BASE_URL=http://localhost:8001
 RAG_API_KEY=your_chosen_rag_secret_key
+SECRET_KEY=your_flask_secret_key
+VOICE_BOT_URL=http://localhost:8088/
+DOC_GEN_URL=http://localhost:5001/
 ```
 
 ### 5. Run RAG Server (NEW — required for Document Agent)

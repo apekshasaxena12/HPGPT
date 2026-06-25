@@ -19,7 +19,8 @@ import glob
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-api_key=os.getenv("GOOGLE_API_KEY")
+api_key = os.getenv("GOOGLE_API_KEY")
+
 
 class AnalyticsAgent(AssistantAgent):
     def __init__(self):
@@ -28,11 +29,7 @@ class AnalyticsAgent(AssistantAgent):
             system_message="You are a data analytics expert who writes Python code using pandas and Plotly."
         )
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-<<<<<<< HEAD
-        self.model = genai.GenerativeModel("gemini-2.5-flash") 
-=======
-        self.model = genai.GenerativeModel("gemini-2.5-flash-lite") 
->>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
+        self.model = genai.GenerativeModel("gemini-2.5-flash")
 
     def extract_code(self, text: str) -> str:
         cleaned = text.strip()
@@ -42,22 +39,43 @@ class AnalyticsAgent(AssistantAgent):
         raw_code = cleaned.strip()
 
         raw_code = re.sub(
-        r'(data\s*=\s*""".*?""")\)+',  # Match any closing parenthesis after multiline string
-        r'\1',                         # Keep only the multiline assignment
-        raw_code,
-        flags=re.DOTALL | re.MULTILINE)
+            r'(data\s*=\s*""".*?""")\)+',
+            r'\1',
+            raw_code,
+            flags=re.DOTALL | re.MULTILINE
+        )
         raw_code = re.sub(r'^\s*\)\s*$', '', raw_code, flags=re.MULTILINE)
-<<<<<<< HEAD
+
         open_count = raw_code.count('(')
         close_count = raw_code.count(')')
         if open_count > close_count:
             raw_code += ')' * (open_count - close_count)
-=======
->>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
         return raw_code
 
-    def generate_code_and_summary(self, df_sample: pd.DataFrame, sample_csv: str, columns: list, stats: str, user_prompt: str):
+    def _fix_code_with_llm(self, code: str, error: str) -> str:
+        """Ask the model to fix broken code. Returns cleaned fixed code."""
+        fix_prompt = f"""The following Python code has an error: {error}
 
+Fix the code so it is syntactically valid and runs correctly.
+Return ONLY the corrected code inside triple backticks. No explanation.
+
+`````python
+{code}
+````"""
+        fix_response = self.model.generate_content(fix_prompt)
+        fix_match = re.search(r"```python\s*(.*?)```", fix_response.text, re.DOTALL)
+        if not fix_match:
+            return code  # Can't fix, return original
+        fixed = self.extract_code(fix_match.group(1))
+        fixed = re.sub(r"df\s*=\s*pd\.read_csv\(.*?\)", "", fixed)
+        fixed = re.sub(r"\bfig\.show\(\)", "", fixed)
+        try:
+            fixed = black.format_str(fixed, mode=black.Mode())
+        except Exception:
+            pass
+        return fixed
+
+    def generate_code_and_summary(self, df_sample: pd.DataFrame, sample_csv: str, columns: list, stats: str, user_prompt: str):
         prompt = f"""
 You are a Python data analyst using pandas and Plotly.
 
@@ -81,8 +99,8 @@ Strict rules:
 - Use correct numeric sorting (ascending or descending as per the request).
 - Don't use df = pd.read_csv(...).
 - Avoid fig.show().
-- Do not include extra closing ')' after multiline string blocks like data = """""".
-
+- Do not include extra closing ')' after multiline string blocks like data = \"\"\"\".
+- Ensure all function calls are properly closed with matching parentheses.
 
 ```python
 # Code:
@@ -93,7 +111,6 @@ Summary:
 <one paragraph here>
 
 Ensure the Python code is syntactically correct and executable without unmatched brackets or indentation errors.
-
 """
         response = self.model.generate_content(prompt)
         text = response.text
@@ -117,7 +134,6 @@ Ensure the Python code is syntactically correct and executable without unmatched
         path = file.get("path")
         content = file.get("content")
 
-        # ✅ Prefer reading from disk if path is provided
         if path and os.path.exists(path):
             logger.info(f"📂 Loading file from disk: {path}")
             if filename.endswith(".csv"):
@@ -125,7 +141,6 @@ Ensure the Python code is syntactically correct and executable without unmatched
             elif filename.endswith(".xlsx"):
                 return pd.read_excel(path, engine="openpyxl")
 
-        # ✅ Fallback to in-memory content
         if filename.endswith(".csv") and content:
             return pd.read_csv(io.StringIO(content))
 
@@ -150,68 +165,58 @@ Ensure the Python code is syntactically correct and executable without unmatched
 
         else:
             raise ValueError("Unsupported file format. Use .csv, .xlsx, or .pdf.")
-        
+
     def get_latest_uploaded_file(self) -> dict:
         files = glob.glob("uploads/*")
         if not files:
             raise FileNotFoundError("No uploaded files found in 'uploads/' directory.")
-        
         latest_file = max(files, key=os.path.getmtime)
         with open(latest_file, "rb") as f:
             content = f.read()
-
         filename = os.path.basename(latest_file)
-        return {
-            "name": filename,
-            "path": latest_file,
-            "content": content
-        }
+        return {"name": filename, "path": latest_file, "content": content}
+
     def is_graph_required(self, user_prompt: str) -> bool:
         reasoning_prompt = f"""
-                You're a data analyst. The user asks: "{user_prompt}"
-                Do you need to generate a plotly graph to answer this, or is a plain data analysis enough?
-
-                Answer only: "yes" or "no"
-                """
+You're a data analyst. The user asks: "{user_prompt}"
+Do you need to generate a plotly graph to answer this, or is a plain data analysis enough?
+Answer only: "yes" or "no"
+"""
         resp = self.model.generate_content(reasoning_prompt).text.lower()
         return "yes" in resp
-    
+
     def generate_analysis_code(self, df: pd.DataFrame, sample_csv: str, stats: str, user_prompt: str) -> str:
         prompt = f"""
-        You are a Python data analyst using pandas.
+You are a Python data analyst using pandas.
 
-        You are given a sample of a DataFrame called `df_sample`, derived from a full DataFrame `df`.
-        Do not use `df_sample` in your code — always write logic assuming the full DataFrame is named `df`.
+You are given a sample of a DataFrame called `df_sample`, derived from a full DataFrame `df`.
+Do not use `df_sample` in your code — always write logic assuming the full DataFrame is named `df`.
 
-        Sample rows (CSV):
-        {sample_csv}
+Sample rows (CSV):
+{sample_csv}
 
-        DataFrame statistics:
-        {stats}
+DataFrame statistics:
+{stats}
 
-        User Query: {user_prompt}
+User Query: {user_prompt}
 
-        INSTRUCTIONS:
+INSTRUCTIONS:
 
-        1. Write Python code to answer the query using the full DataFrame `df`.
-        2. Do NOT use `df.read_csv`, `df.sample()`, or hardcoded values unless explicitly instructed.
-        3. You MUST use `print(...)` to display the result. Do not return or evaluate expressions silently.
-        4. Avoid assumptions about column names — rely only on the provided sample and stats.
-        5. If comparing string values (e.g., Brand == "Maruti"), always use:
-        `df["Brand"].str.strip().str.lower() == "maruti"` to ensure consistent matching.
-        6. Do NOT use `pandas.compat.StringIO` — it is deprecated and will cause an error. Use `io.StringIO` if needed.
-        7. Wrap only the code inside triple backticks like this:
+1. Write Python code to answer the query using the full DataFrame `df`.
+2. Do NOT use `df.read_csv`, `df.sample()`, or hardcoded values unless explicitly instructed.
+3. You MUST use `print(...)` to display the result. Do not return or evaluate expressions silently.
+4. Avoid assumptions about column names — rely only on the provided sample and stats.
+5. If comparing string values (e.g., Brand == "Maruti"), always use:
+   `df["Brand"].str.strip().str.lower() == "maruti"` to ensure consistent matching.
+6. Do NOT use `pandas.compat.StringIO` — it is deprecated and will cause an error. Use `io.StringIO` if needed.
+7. Wrap only the code inside triple backticks like this:
 
-        ```python
-        <your code>
-        Below the code block, write a brief summary sentence of the result as plain text (no backticks, no markdown).
+```python
+<your code>
+```
 
-        Example:
-
-        Count rows for Brand == 'Maruti'
-        print(df[df["Brand"].str.strip().str.lower() == "maruti"].shape[0]) is the count of rows for Brand 'Maruti'.
-        """
-        
+Below the code block, write a brief summary sentence of the result as plain text (no backticks, no markdown).
+"""
         response = self.model.generate_content(prompt).text
 
         code_match = re.search(r"```python\s*(.*?)```", response, re.DOTALL)
@@ -222,22 +227,13 @@ Ensure the Python code is syntactically correct and executable without unmatched
 
         return self.extract_code(code), summary
 
-    def execute_and_rephrase_code(
-        self,
-        df: pd.DataFrame,
-        code: str,
-        user_prompt: str
-    ) -> dict:
-        """
-        Executes provided code on the DataFrame `df`, captures output,
-        and rephrases it using the LLM to produce a natural-language summary.
-        """
+    def execute_and_rephrase_code(self, df: pd.DataFrame, code: str, user_prompt: str) -> dict:
         local_vars = {"pd": pd, "df": df}
         buffer = io.StringIO()
 
         with redirect_stdout(buffer):
             try:
-                ast.parse(code)  # Check syntax first
+                ast.parse(code)
                 exec(code, local_vars)
             except Exception as e:
                 return {
@@ -256,15 +252,15 @@ Ensure the Python code is syntactically correct and executable without unmatched
             }
 
         rephrase_prompt = f"""
-    You are a helpful assistant. The user asked:
-    "{user_prompt}"
+You are a helpful assistant. The user asked:
+"{user_prompt}"
 
-    The Python code produced this output:
-    {output}
+The Python code produced this output:
+{output}
 
-    Rephrase this as a concise, friendly sentence that directly answers the user's query.
-    Final answer:
-    """
+Rephrase this as a concise, friendly sentence that directly answers the user's query.
+Final answer:
+"""
         try:
             rephrased = self.model.generate_content(rephrase_prompt).text.strip()
         except Exception as e:
@@ -277,9 +273,20 @@ Ensure the Python code is syntactically correct and executable without unmatched
             "agent_type": "analytics"
         }
 
-
-
     async def run(self, file: dict = None, user_prompt: str = "") -> dict:
+        # Handle "(use file: X)" override — strip it from prompt, locate file on disk
+        file_override_match = re.search(r'\(use file:\s*([^)]+)\)', user_prompt)
+        if file_override_match:
+            specified_filename = file_override_match.group(1).strip()
+            user_prompt = re.sub(r'\s*\(use file:[^)]+\)', '', user_prompt).strip()
+            collections_dir = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..", "..", "collections"
+            )
+            for root, dirs, files in os.walk(collections_dir):
+                for fname in files:
+                    if fname == specified_filename:
+                        file = {"name": fname, "path": os.path.join(root, fname)}
+                        break
 
         code = ""
         try:
@@ -294,12 +301,10 @@ Ensure the Python code is syntactically correct and executable without unmatched
             if df is None or df.empty:
                 return {"error": "❌ No valid data found in the uploaded file."}
 
-            df_sample = df.sample(min(len(df), 10), random_state=42) # more diverse than head()
+            df_sample = df.sample(min(len(df), 10), random_state=42)
             sample_csv = df_sample.to_csv(index=False)
             columns = df.columns.tolist()
             stats = df.describe(include='all').to_string()
-
-            # Optional: include additional stats like unique counts, nulls, dtypes
             extra_info = pd.DataFrame({
                 "dtype": df.dtypes,
                 "nulls": df.isnull().sum(),
@@ -307,37 +312,74 @@ Ensure the Python code is syntactically correct and executable without unmatched
             }).to_string()
 
             if self.is_graph_required(user_prompt):
-                code, summary = self.generate_code_and_summary(df_sample, sample_csv, columns, stats + "\n\n" + extra_info, user_prompt)
+                code, summary = self.generate_code_and_summary(
+                    df_sample, sample_csv, columns,
+                    stats + "\n\n" + extra_info, user_prompt
+                )
                 is_plot = True
             else:
-                code, summary = self.generate_analysis_code(df_sample, sample_csv, stats + "\n\n" + extra_info, user_prompt)
+                code, summary = self.generate_analysis_code(
+                    df_sample, sample_csv,
+                    stats + "\n\n" + extra_info, user_prompt
+                )
                 is_plot = False
 
-            
-            local_vars = {"pd": pd, "px": px, "go": go, "df": df}
-            buffer = io.StringIO()
+            # --- Self-correction retry loop ---
+            max_retries = 3
+            last_error = None
+            success = False
 
-            with redirect_stdout(buffer):
-                                try:
-                                    try:
-                                        ast.parse(code)
-                                    except SyntaxError as e:
-                                        return {
-                                            "error": f"❌ Pre-execution syntax error:\n\n{e}\n\npython\n{code}\n"
-                                        }
+            for attempt in range(max_retries):
+                # Step 1: syntax check
+                try:
+                    ast.parse(code)
+                except SyntaxError as e:
+                    last_error = str(e)
+                    logger.warning(f"⚠️ Syntax error on attempt {attempt + 1}: {e}")
+                    if attempt < max_retries - 1:
+                        code = self._fix_code_with_llm(code, str(e))
+                        continue
+                    else:
+                        return {
+                            "error": f"❌ Could not fix syntax error after {max_retries} attempts:\n\n{last_error}\n\npython\n{code}\n",
+                            "code": code,
+                            "agent_type": "analytics"
+                        }
 
-                                    exec(code, local_vars)
-                                    if not is_plot:
-                                        return self.execute_and_rephrase_code(df=df, code=code, user_prompt=user_prompt)
+                # Step 2: execute
+                local_vars = {"pd": pd, "px": px, "go": go, "df": df}
+                buffer = io.StringIO()
+                with redirect_stdout(buffer):
+                    try:
+                        exec(code, local_vars)
+                    except Exception as e:
+                        last_error = str(e)
+                        logger.warning(f"⚠️ Runtime error on attempt {attempt + 1}: {e}")
+                        if attempt < max_retries - 1:
+                            code = self._fix_code_with_llm(code, str(e))
+                            continue
+                        else:
+                            return {
+                                "error": f"❌ Runtime error after {max_retries} attempts:\n\n{last_error}\n\npython\n{code}\n",
+                                "code": code,
+                                "agent_type": "analytics"
+                            }
 
+                # Step 3: if non-plot, rephrase and return
+                if not is_plot:
+                    return self.execute_and_rephrase_code(df=df, code=code, user_prompt=user_prompt)
 
+                success = True
+                break  # Execution succeeded
 
-                                    
-                                except SyntaxError as e:
-                                    return {
-                                        "error": f"❌ Syntax error in generated code:\n\n{e}\n\npython\n{code}\n"
-                                        }
+            if not success:
+                return {
+                    "error": f"❌ Failed after {max_retries} attempts. Last error: {last_error}",
+                    "code": code,
+                    "agent_type": "analytics"
+                }
 
+            # --- Extract figures and render HTML ---
             figs = [v for v in local_vars.values() if isinstance(v, go.Figure)]
             if not figs:
                 return {
@@ -370,7 +412,6 @@ Ensure the Python code is syntactically correct and executable without unmatched
                 "code": code,
                 "agent_type": "analytics"
             }
-
 
         except Exception as e:
             return {

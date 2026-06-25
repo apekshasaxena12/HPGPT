@@ -36,7 +36,17 @@ __pycache__/
 sessions.json
 conversations.json
 feedback.json
+collections_history.json
 uploads/
 rag_uploads/
 *.db
 .webui_secret_key
+
+# LaTeX files
+*.tex
+
+# Generated outputs
+year_of_study_bar_chart.html
+
+# Claude Code settings
+.claude/

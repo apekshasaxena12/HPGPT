@@ -1,11 +1,8 @@
 # === Web Frameworks ===
 flask
 fastapi
-flask-socketio
-python-socketio
 python-multipart
 uvicorn
-websockets
 werkzeug
 requests
 
@@ -24,7 +21,6 @@ itsdangerous
 
 # === File Handling & Utilities ===
 click
-watchdog
 aiofiles
 pillow
 openpyxl
@@ -44,16 +40,18 @@ psycopg2-binary
 langchain
 langchain-core
 langchain-community
+langchain-groq
+langchain-huggingface
+langchain-text-splitters
 langgraph
 langgraph-checkpoint-sqlite
 faiss-cpu
+sentence-transformers
 
 # === LLMs & Agents ===
 google-generativeai
 langchain-google-genai
 groq
-duckduckgo-search
 pyautogen
 black
 plotly
-matplotlib

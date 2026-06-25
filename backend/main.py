@@ -3,10 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import json
-<<<<<<< HEAD
 from pathlib import Path
-=======
->>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 import uuid
 import os
 import aiofiles
@@ -18,13 +15,8 @@ from typing import Dict
 import asyncio
 from urllib.parse import parse_qs
 from dotenv import load_dotenv
-<<<<<<< HEAD
 from backend.agents.collections_agent import suggest_category, save_document_to_collection, list_documents, CATEGORIES
 from backend.agents.collections_rag import index_document, query_collections, rebuild_index_from_disk
-
-
-=======
->>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 
 # Load environment variables
 load_dotenv()
@@ -59,23 +51,15 @@ class FeedbackData(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
-<<<<<<< HEAD
     os.makedirs("uploads", exist_ok=True)
     rebuild_index_from_disk()
-=======
-    # Startup
-    os.makedirs("uploads", exist_ok=True)
->>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
     await database.connect()
     logger.info("hpGPT Backend started successfully")
     yield  # Application runs here
     # Shutdown
     await database.disconnect()
     logger.info("hpGPT Backend shutting down")
-<<<<<<< HEAD
     
-=======
->>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 
 app = FastAPI(
     title="hpGPT Backend", 
@@ -609,7 +593,6 @@ if __name__ == "__main__":
         port=8000,
         log_level="info",
         reload=True
-<<<<<<< HEAD
     )
 
 @app.get("/collections/structure")
@@ -683,8 +666,11 @@ async def confirm_collection_placement(body: dict):
 async def query_collection(body: dict):
     try:
         question = body.get("question", "")
-        result = query_collections(question)
-        return result  
+        department = body.get("department") or None
+        subcategory = body.get("subcategory") or None
+        history = body.get("history") or None
+        result = query_collections(question, department=department, subcategory=subcategory, history=history)
+        return result
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -703,9 +689,27 @@ async def view_document(path: str):
 @app.post("/collections/query-with-chart")
 async def query_collection_with_chart(body: dict):
     try:
+        import re
+        import pandas as pd
+        from backend.agents.analytics_agent import AnalyticsAgent
+
         question = body.get("question", "")
-        rag_result = query_collections(question)
+        department = body.get("department") or None
+        subcategory = body.get("subcategory") or None
+        history = body.get("history") or None
+
+        # Parse "(use file: X)" override from clarification button clicks
+        forced_file = None
+        file_override_match = re.search(r'\(use file:\s*([^)]+)\)', question)
+        if file_override_match:
+            forced_file = file_override_match.group(1).strip()
+            question = re.sub(r'\s*\(use file:[^)]+\)', '', question).strip()
+
+        rag_result = query_collections(question, department=department, subcategory=subcategory, history=history)
         sources = rag_result.get("sources", [])
+
+        if rag_result.get("not_in_collection"):
+            return rag_result
 
         if not sources:
             return rag_result
@@ -716,34 +720,125 @@ async def query_collection_with_chart(body: dict):
         if not is_chart_request:
             return rag_result
 
-        # Filter sources to only xlsx/csv files for charting
-        data_sources = [s for s in sources if s["name"].endswith((".xlsx", ".csv", ".db"))]
-        if not data_sources:
-            # No data file found, return plain RAG answer
+        # --- Scan ALL files in the collection, not just FAISS hits ---
+        # FAISS may only return one file even when multiple files match.
+        # We do a direct disk scan of the active department/subcategory folder.
+        collections_dir = os.path.normpath(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "collections")
+        )
+
+        def get_all_data_files(dept: str = None, sub: str = None) -> list:
+            """Walk the collections folder and return all xlsx/csv files in scope."""
+            results = []
+            for root, dirs, files in os.walk(collections_dir):
+                for fname in files:
+                    if not fname.endswith((".xlsx", ".csv")):
+                        continue
+                    full_path = os.path.join(root, fname)
+                    rel = os.path.relpath(full_path, collections_dir)
+                    parts = rel.split(os.sep)
+                    file_dept = parts[0] if len(parts) > 0 else ""
+                    file_sub  = parts[1] if len(parts) > 1 else ""
+                    if dept and file_dept != dept:
+                        continue
+                    if sub and file_sub != sub:
+                        continue
+                    results.append({
+                        "name": fname,
+                        "path": full_path,
+                        "department": file_dept,
+                        "subcategory": file_sub,
+                    })
+            return results
+
+        def col_matches_question(col: str, q: str) -> bool:
+            """
+            True if ≥50% of the column's words appear in the question.
+            e.g. 'monthly_revenue_usd' vs 'monthly revenue bar chart'
+            → col_words={'monthly','revenue','usd'}, overlap={'monthly','revenue'} → 67% ✓
+            """
+            col_words = set(re.split(r'[_\s]+', col.lower())) - {''}
+            q_words   = set(re.split(r'[_\s]+', q.lower()))
+            if not col_words:
+                return False
+            return len(col_words & q_words) / len(col_words) >= 0.5
+
+        all_data_files = get_all_data_files(department, subcategory)
+
+        # If no data files found on disk, fall back to FAISS sources
+        if not all_data_files:
+            all_data_files = [s for s in sources if s["name"].endswith((".xlsx", ".csv", ".db"))]
+
+        if not all_data_files:
             return rag_result
 
-        from backend.agents.analytics_agent import AnalyticsAgent
-        import pandas as pd
-
         agent = AnalyticsAgent()
-        source = data_sources[0]  # Use first data file only
-        file_info = {
-            "name": source["name"],
-            "path": source["path"]
-        }
+        question_lower_full = question.lower()
 
-        # Read actual column names and inject into prompt
+        # If user clicked a clarification button, use that file directly
+        if forced_file:
+            source = next((s for s in all_data_files if s["name"] == forced_file), None)
+            if not source:
+                source = all_data_files[0]
+
+        # If user mentioned a filename explicitly in the question, use it
+        elif any(s["name"].lower() in question_lower_full for s in all_data_files):
+            source = next(s for s in all_data_files if s["name"].lower() in question_lower_full)
+
+        else:
+            # Build column map for every data file on disk
+            file_columns: dict = {}
+            for src in all_data_files:
+                try:
+                    if src["name"].endswith(".xlsx"):
+                        df_temp = pd.read_excel(src["path"], engine="openpyxl", nrows=0)
+                        # Handle CSV-saved-as-xlsx
+                        if len(df_temp.columns) == 1 and ',' in df_temp.columns[0]:
+                            import io
+                            df_temp = pd.read_csv(io.StringIO(df_temp.columns[0]))
+                        file_columns[src["name"]] = [c.lower().strip() for c in df_temp.columns.tolist()]
+                    elif src["name"].endswith(".csv"):
+                        df_temp = pd.read_csv(src["path"], nrows=0)
+                        file_columns[src["name"]] = [c.lower().strip() for c in df_temp.columns.tolist()]
+                    else:
+                        file_columns[src["name"]] = []
+                except Exception:
+                    file_columns[src["name"]] = []
+
+            # Find all files whose columns match the question
+            ambiguous_sources = [
+                src for src in all_data_files
+                if any(col_matches_question(col, question_lower_full)
+                       for col in file_columns.get(src["name"], []))
+            ]
+
+            if len(ambiguous_sources) > 1:
+                file_list = "\n".join([f"• {s['name']}" for s in ambiguous_sources])
+                return {
+                    "answer": (
+                        f"I found **Monthly_Revenue_USD** (or a similar column) in "
+                        f"**{len(ambiguous_sources)} files**. Which one should I use?\n\n"
+                        f"{file_list}\n\n"
+                        "Click a file button below or re-ask mentioning the file name."
+                    ),
+                    "clarifying": True,
+                    "sources": ambiguous_sources
+                }
+
+            # Only one match — use it
+            source = ambiguous_sources[0] if ambiguous_sources else all_data_files[0]
+
+        file_info = {"name": source["name"], "path": source["path"]}
+
+        # Inject actual column names into prompt
         try:
             if source["name"].endswith(".xlsx"):
-                try:
-                    df_preview = pd.read_excel(source["path"], engine="openpyxl", nrows=2)
-                    # Detect if it's actually a CSV saved as xlsx
-                    if len(df_preview.columns) == 1 and ',' in df_preview.columns[0]:
-                        import io
-                        df_preview = pd.read_csv(io.StringIO(df_preview.columns[0] + '\n' + 
-                            df_preview.iloc[:,0].str.cat(sep='\n')))
-                except Exception:
-                    df_preview = None
+                df_preview = pd.read_excel(source["path"], engine="openpyxl", nrows=2)
+                if len(df_preview.columns) == 1 and ',' in df_preview.columns[0]:
+                    import io
+                    df_preview = pd.read_csv(io.StringIO(
+                        df_preview.columns[0] + '\n' + df_preview.iloc[:, 0].str.cat(sep='\n')
+                    ))
             elif source["name"].endswith(".csv"):
                 df_preview = pd.read_csv(source["path"], nrows=2)
             else:
@@ -758,12 +853,12 @@ async def query_collection_with_chart(body: dict):
             enriched_prompt = question
 
         result = await agent.run(file=file_info, user_prompt=enriched_prompt)
-        result["sources"] = [source]  # Only attach the data source, not docx files
+        result["sources"] = [source]
         return result
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-
+    
 @app.post("/sessions/{session_id}/save-message")
 async def save_message_to_session(session_id: str, body: dict):
     try:
@@ -808,16 +903,35 @@ async def get_collections_history():
 async def save_collections_history(body: dict):
     try:
         history = body.get("history", [])
-        # Strip plotHTML before saving (too large for JSON)
         slim = []
         for entry in history:
+            # Preserve full messages array (including plotHTML per message)
+            raw_messages = entry.get("messages", [])
+            if raw_messages:
+                messages = [
+                    {
+                        "question": m.get("question", ""),
+                        "answer": m.get("answer", ""),
+                        "sources": m.get("sources", []),
+                        "plotHTML": m.get("plotHTML")
+                    }
+                    for m in raw_messages
+                ]
+            else:
+                messages = [{
+                    "question": entry.get("question", ""),
+                    "answer": entry.get("answer", ""),
+                    "sources": entry.get("sources", []),
+                    "plotHTML": entry.get("plotHTML")
+                }]
             slim.append({
                 "title": entry.get("title", ""),
                 "question": entry.get("question", ""),
                 "answer": entry.get("answer", ""),
                 "timestamp": entry.get("timestamp", ""),
                 "id": entry.get("id", ""),
-                "hasPlot": entry.get("plotHTML") is not None
+                "sources": entry.get("sources", []),
+                "messages": messages
             })
         with open(COLLECTIONS_HISTORY_FILE, "w") as f:
             json.dump({"history": slim}, f, indent=2)
@@ -837,6 +951,3 @@ async def delete_collections_history_entry(entry_id: str):
         return {"success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-=======
-    )
->>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97

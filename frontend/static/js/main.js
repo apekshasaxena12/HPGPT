@@ -588,7 +588,7 @@ class HPGPTClient {
 
             this.clearChat();
 
-            const response = await fetch(`http://localhost:8000/sessions/${this.currentSessionId}/history?limit=${this.contextLimit}`);
+            const response = await fetch(`http://localhost:8080/sessions/${this.currentSessionId}/history?limit=${this.contextLimit}`);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -692,7 +692,7 @@ class HPGPTClient {
     async loadChatHistory() {
         try {
             console.log('Loading chat history...');
-            const response = await fetch('http://localhost:8000/sessions');
+            const response = await fetch('http://localhost:8080/sessions');
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -779,7 +779,7 @@ class HPGPTClient {
 
     async createNewSession() {
         try {
-            const response = await fetch('http://localhost:8000/sessions', {
+            const response = await fetch('http://localhost:8080/sessions', {
                 method: 'POST'
             });
             const data = await response.json();
@@ -803,7 +803,7 @@ class HPGPTClient {
             this.chatTitle.textContent = title;
             this.clearChat();
 
-            const response = await fetch(`http://localhost:8000/sessions/${sessionId}/history?limit=${this.contextLimit}`);
+            const response = await fetch(`http://localhost:8080/sessions/${sessionId}/history?limit=${this.contextLimit}`);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -849,7 +849,17 @@ class HPGPTClient {
             if (entry.messages && Array.isArray(entry.messages)) {
                 entry.messages.forEach((msg, msgIndex) => {
                     console.log(`Adding message ${msgIndex}:`, msg.role, msg.content.substring(0, 50));
-                    this.addMessage(msg.content, msg.role === 'user' ? 'user' : 'assistant', true);
+                    if (msg.role === 'user' && msg.files && msg.files.length > 0) {
+                        let fileSection = '<div class="file-preview-section">';
+                        msg.files.forEach(fname => {
+                            fileSection += `<div class="file-preview">📄 <span class="file-name">${fname}</span></div>`;
+                        });
+                        fileSection += '</div>';
+                        const textSection = msg.content ? `<div class="user-text">${this.escapeHtml(msg.content)}</div>` : '';
+                        this.addMessage(fileSection + textSection, 'user', true);
+                    } else {
+                        this.addMessage(msg.content, msg.role === 'user' ? 'user' : 'assistant', true);
+                    }
                 });
             }
         });
@@ -879,7 +889,7 @@ class HPGPTClient {
         }
 
         try {
-            const response = await fetch(`http://localhost:8000/sessions/${sessionId}`, {
+            const response = await fetch(`http://localhost:8080/sessions/${sessionId}`, {
                 method: 'DELETE'
             });
 
@@ -903,7 +913,7 @@ class HPGPTClient {
         const newTitle = prompt("Enter new chat name:");
         if (!newTitle || !newTitle.trim()) return;
         try {
-            const response = await fetch(`http://localhost:8000/sessions/${sessionId}/rename`, {
+            const response = await fetch(`http://localhost:8080/sessions/${sessionId}/rename`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title: newTitle.trim() })
@@ -942,7 +952,7 @@ class HPGPTClient {
         }
 
         // 🌐 Connect with login_session_id in query params
-        this.websocket = new WebSocket(`ws://localhost:8000/ws/${this.currentSessionId}?login_session_id=${loginSessionId}`);
+        this.websocket = new WebSocket(`ws://localhost:8080/ws/${this.currentSessionId}?login_session_id=${loginSessionId}`);
 
         this.websocket.onopen = () => {
             this.isConnected = true;
@@ -1449,7 +1459,7 @@ class HPGPTClient {
                 timestamp: new Date().toISOString()
             };
 
-            const response = await fetch('http://localhost:8000/feedback', {
+            const response = await fetch('http://localhost:8080/feedback', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1561,7 +1571,7 @@ class HPGPTClient {
             formData.append('file', file);
 
             try {
-                const response = await fetch(`http://localhost:8000/upload/${this.currentSessionId}`, {
+                const response = await fetch(`http://localhost:8080/upload/${this.currentSessionId}`, {
                     method: 'POST',
                     body: formData
                 });
@@ -1612,16 +1622,27 @@ class HPGPTClient {
     }
 
     formatMessage(content) {
-        // Handle fenced code blocks (```language\n...```)
+        // Extract code blocks first so their newlines are never converted to <br>
+        const codeBlocks = [];
         content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang = 'plaintext', code) => {
-            const encoded = Prism.util.encode(code);
-            return `<pre><code class="language-${lang}">${encoded}</code></pre>`;
+            const encoded = Prism.util.encode(code.trimEnd());
+            codeBlocks.push(`<pre><code class="language-${lang}">${encoded}</code></pre>`);
+            return `\x00CODEBLOCK_${codeBlocks.length - 1}\x00`;
         });
+
+        // Process remaining (non-code) content
         content = content.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
         content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         content = content.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        // Insert newline before numbered list items that run together (e.g. "...born.2. South")
+        content = content.replace(/([^\n])(\d{1,2})\.\s+/g, '$1\n$2. ');
+        // Insert newline before bullet points that run together
+        content = content.replace(/([^\n])([-•])\s+/g, '$1\n$2 ');
         content = content.replace(/\n\n/g, '<br><br>');
         content = content.replace(/\n/g, '<br>');
+
+        // Restore code blocks with their original newlines intact
+        content = content.replace(/\x00CODEBLOCK_(\d+)\x00/g, (_, i) => codeBlocks[+i]);
         return content;
     }
 

@@ -6,22 +6,21 @@ from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depe
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
+import requests as _requests
 from langchain_community.embeddings import HuggingFaceEmbeddings
 import pdfplumber
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 
-from google import genai
-
 load_dotenv()
 
 # ── Config ───────────────────────────────────────────────────────────────────
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-RAG_API_KEY    = os.getenv("RAG_API_KEY")
-UPLOAD_DIR     = "rag_uploads"
+RAG_API_KEY = os.getenv("RAG_API_KEY")
+UPLOAD_DIR  = "rag_uploads"
+OLLAMA_URL  = "http://localhost:11434/v1/chat/completions"
+QWEN_MODEL  = "qwen2.5:7b"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-client = genai.Client(api_key=GOOGLE_API_KEY) 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -61,16 +60,24 @@ def build_vectorstore(text: str, filename: str) -> FAISS:
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     return FAISS.from_texts(chunks, embedding=embeddings)
 
-def gemini_generate(prompt: str) -> str:
-    """Call Gemini to generate a response."""
+def qwen_generate(prompt: str) -> str:
+    """Call Qwen2.5 via Ollama to generate a response."""
     import re
-    response = client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
-    text = response.text.strip()
-    text = re.sub(r'#{1,3}\s*', '', text)        
-    text = re.sub(r'---+', '\n', text)            
-    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)   
-    text = re.sub(r'\*(.*?)\*', r'\1', text)      
-    text = re.sub(r'\n{3,}', '\n\n', text)       
+    payload = {
+        "model": QWEN_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+        "max_tokens": 4096,
+        "stream": False,
+    }
+    resp = _requests.post(OLLAMA_URL, json=payload, timeout=120)
+    resp.raise_for_status()
+    text = resp.json()["choices"][0]["message"]["content"].strip()
+    text = re.sub(r'#{1,3}\s*', '', text)
+    text = re.sub(r'---+', '\n', text)
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.*?)\*', r'\1', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
     return text
 
 
@@ -132,7 +139,7 @@ async def summarize(
         )
 
         try:
-            summary = gemini_generate(prompt)
+            summary = qwen_generate(prompt)
             results.append({"filename": filename, "summary": summary})
             logger.info(f"✅ Summarized: {filename}")
         except Exception as e:
@@ -167,7 +174,7 @@ async def query(
     )
 
     try:
-        answer = gemini_generate(full_prompt)
+        answer = qwen_generate(full_prompt)
         logger.info(f"✅ Query answered for {doc_id}")
         return JSONResponse({"result": answer})
     except Exception as e:
@@ -215,7 +222,7 @@ async def compare(
         )
 
     try:
-        result = gemini_generate(prompt)
+        result = qwen_generate(prompt)
         return JSONResponse({"comparison": result})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

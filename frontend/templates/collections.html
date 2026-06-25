@@ -228,6 +228,7 @@
 
         <button class="upload-btn" onclick="openUploadDialog()">📁 Upload Document</button>
         <input type="file" id="collection-file-input" style="display:none" accept=".pdf,.doc,.docx,.txt,.csv,.xlsx,.db,.sql" onchange="handleCollectionUpload(event)" />
+        <button class="upload-btn" style="background:#00205b;border:2px solid #e4002b;margin-top:-10px;" onclick="newCollectionsChat()">+ New Chat</button>
 
         <div id="dept-list">
             <!-- Departments populated by JS -->
@@ -260,6 +261,12 @@
 
         <!-- Chat area -->
         <div class="input-container">
+            <div id="filter-badge-container" style="display:none;padding:6px 12px 0 12px;">
+                <div id="filter-badge" style="display:inline-flex;align-items:center;gap:8px;background:#00205b;color:white;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;">
+                    <span id="filter-badge-text"></span>
+                    <span onclick="clearActiveFilter()" style="cursor:pointer;font-size:15px;line-height:1;opacity:0.8;" title="Clear filter">✕</span>
+                </div>
+            </div>
             <div class="input-area">
                 <input type="text" id="collections-input" placeholder="Ask a question across all collections..." onkeypress="handleCollectionsKey(event)" style="flex:1;border:none;background:transparent;font-size:16px;padding:12px;outline:none;color:#333;" />
                 <button onclick="sendCollectionsQuery()" class="send-btn">Send</button>
@@ -301,9 +308,37 @@
 <script>
 const CATEGORIES = {};
 let pendingUpload = null;
+let activeFilter = { department: null, subcategory: null };
+
+function setActiveFilter(dept, sub) {
+    activeFilter = { department: dept, subcategory: sub };
+    const label = `📂 ${dept.replace(/_/g,' ')} › ${sub.replace(/_/g,' ')}`;
+    document.getElementById('filter-badge-text').textContent = label;
+    document.getElementById('filter-badge-container').style.display = 'block';
+    document.getElementById('collections-input').placeholder = `Ask about ${dept.replace(/_/g,' ')} › ${sub.replace(/_/g,' ')}...`;
+}
+
+function clearActiveFilter() {
+    activeFilter = { department: null, subcategory: null };
+    document.getElementById('filter-badge-container').style.display = 'none';
+    document.getElementById('collections-input').placeholder = 'Ask a question across all collections...';
+}
+
+function newCollectionsChat() {
+    clearActiveFilter();
+    activeHistoryEntryId = null;
+    document.getElementById('main-content').innerHTML = `
+        <div class="welcome-message" style="margin-top:30px;">
+            <h2>Welcome to Collections</h2>
+            <p>Browse department documents from the sidebar, or ask a question below to search across all collections.</p>
+        </div>`;
+    document.getElementById('main-title').textContent = 'Welcome to Collections';
+    document.querySelectorAll('.sub-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('#collections-history-list .chat-item').forEach(el => el.classList.remove('active'));
+}
 
 async function loadStructure() {
-    const res = await fetch('http://localhost:8000/collections/structure');
+    const res = await fetch('http://localhost:8080/collections/structure');
     const data = await res.json();
     Object.assign(CATEGORIES, data.categories);
     renderDeptList();
@@ -340,8 +375,9 @@ async function loadDocuments(dept, sub) {
     document.querySelectorAll('.sub-item').forEach(el => el.classList.remove('active'));
     event.target.classList.add('active');
 
+    setActiveFilter(dept, sub);
     document.getElementById('main-title').textContent = `${dept.replace(/_/g,' ')} > ${sub.replace(/_/g,' ')}`;
-    const res = await fetch(`http://localhost:8000/collections/documents?department=${dept}&subcategory=${sub}`);
+    const res = await fetch(`http://localhost:8080/collections/documents?department=${dept}&subcategory=${sub}`);
     const data = await res.json();
     const content = document.getElementById('main-content');
 
@@ -361,7 +397,7 @@ async function loadDocuments(dept, sub) {
 }
 
 async function viewDocument(path, name) {
-    const res = await fetch(`http://localhost:8000/collections/document/view?path=${encodeURIComponent(path)}`);
+    const res = await fetch(`http://localhost:8080/collections/document/view?path=${encodeURIComponent(path)}`);
     const data = await res.json();
     document.getElementById('viewer-title').textContent = name;
     document.getElementById('viewer-content').textContent = data.content;
@@ -383,7 +419,7 @@ async function handleCollectionUpload(event) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const res = await fetch('http://localhost:8000/collections/upload', { method: 'POST', body: formData });
+    const res = await fetch('http://localhost:8080/collections/upload', { method: 'POST', body: formData });
     const data = await res.json();
 
     pendingUpload = data;
@@ -404,7 +440,7 @@ async function confirmUpload() {
     const dept = document.getElementById('modal-dept').value;
     const sub = document.getElementById('modal-sub').value;
 
-    const res = await fetch('http://localhost:8000/collections/confirm', {
+    const res = await fetch('http://localhost:8080/collections/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -441,7 +477,9 @@ async function sendCollectionsQuery() {
     if (!question) return;
 
     const chatDiv = document.getElementById('main-content');
-    chatDiv.innerHTML = '';
+    // Remove welcome message only; preserve existing Q&A in the same chat
+    const welcome = chatDiv.querySelector('.welcome-message');
+    if (welcome) welcome.remove();
 
     const userMsg = document.createElement('div');
     userMsg.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:20px;';
@@ -452,44 +490,79 @@ async function sendCollectionsQuery() {
     const loadingMsg = document.createElement('div');
     loadingMsg.id = 'loading-msg';
     loadingMsg.style.cssText = 'display:flex;margin-bottom:20px;';
-    loadingMsg.innerHTML = `<div style="background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;opacity:0.7;">Searching collections...</div>`;
+    const loadingScope = activeFilter.subcategory
+        ? `${activeFilter.department.replace(/_/g,' ')} › ${activeFilter.subcategory.replace(/_/g,' ')}`
+        : 'all collections';
+    loadingMsg.innerHTML = `<div style="background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;opacity:0.7;">Searching ${loadingScope}...</div>`;
     chatDiv.appendChild(loadingMsg);
     chatDiv.scrollTop = chatDiv.scrollHeight;
 
-    const res = await fetch('http://localhost:8000/collections/query-with-chart', {
+    // Build recent conversation history for context-aware answers
+    const recentHistory = [];
+    if (activeHistoryEntryId !== null) {
+        const activeEntry = collectionsHistory.find(e => e.id === activeHistoryEntryId);
+        if (activeEntry && activeEntry.messages) {
+            activeEntry.messages.slice(-6).forEach(m => {
+                recentHistory.push({ role: 'user', content: m.question });
+                recentHistory.push({ role: 'assistant', content: m.answer });
+            });
+        }
+    }
+
+    const res = await fetch('http://localhost:8080/collections/query-with-chart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question })
+        body: JSON.stringify({
+            question,
+            department: activeFilter.department,
+            subcategory: activeFilter.subcategory,
+            history: recentHistory
+        })
     });
     const data = await res.json();
     document.getElementById('loading-msg')?.remove();
 
-
-
-    // --- Sources HTML ---
-    let sourcesHTML = '';
-    if (data.sources && data.sources.length > 0) {
-        sourcesHTML = `
-        <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.2);">
-            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:8px;font-weight:700;letter-spacing:1px;">SOURCES </div>
-            ${data.sources.map(s => `
-            <div style="display:flex;flex-direction:row;align-items:center;gap:10px;background:rgba(255,255,255,0.08);padding:8px 12px;border-radius:8px;margin-bottom:6px;">
-                <span style="font-size:20px;flex-shrink:0;">${s.name.endsWith('.pdf') ? '📄' : (s.name.endsWith('.xlsx') || s.name.endsWith('.csv')) ? '📊' : '📋'}</span>
-                <div style="display:flex;flex-direction:column;">
-                    <span style="cursor:pointer;color:#ff6b6b;font-weight:600;font-size:13px;text-decoration:underline;"
-                          onclick="viewDocument('${s.path}', '${s.name}')">${s.name}</span>
-                    <span style="color:rgba(255,255,255,0.45);font-size:11px;margin-top:2px;">${s.department} › ${s.subcategory}</span>
-                </div>
-            </div>`).join('')}
-        </div>`;
+    // --- Sources HTML helper ---
+    function buildSourcesHTML(sources) {
+        if (!sources || sources.length === 0) return '';
+        return `<details style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.15);padding-top:4px;"><summary style="font-size:11px;color:rgba(255,255,255,0.55);font-weight:700;letter-spacing:1px;cursor:pointer;outline:none;list-style:none;user-select:none;line-height:1.8;">SOURCES (${sources.length})</summary><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${sources.map(s => `<span style="cursor:pointer;color:#ff6b6b;font-size:11px;text-decoration:underline;white-space:nowrap;" onclick="viewDocument('${s.path}', '${s.name}')">${s.name}</span>`).join('')}</div></details>`;
     }
 
-    // --- Build response bubble ---
+    const sourcesHTML = buildSourcesHTML(data.sources);
     const assistantMsg = document.createElement('div');
     assistantMsg.style.cssText = 'display:flex;margin-bottom:20px;align-items:flex-start;width:90%;';
 
+    // --- Clarifying question (ambiguous columns across multiple files) ---
+    if (data.clarifying) {
+        const answerText = (data.answer || '')
+            .replace(/^[ \t]+/gm, '').trim()
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n/g, '<br>');
 
-    // Check if we got a Plotly chart back
+        assistantMsg.innerHTML = `
+            <div style="background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;max-width:80%;font-size:15px;line-height:1.8;">
+                ${answerText}
+                <div id="clarify-btn-row" style="margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;"></div>
+                ${sourcesHTML}
+            </div>`;
+
+        chatDiv.appendChild(assistantMsg);
+
+        const btnRow = document.getElementById('clarify-btn-row');
+        (data.sources || []).forEach(s => {
+            const btn = document.createElement('button');
+            btn.textContent = s.name;
+            btn.style.cssText = 'background:#e4002b;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;';
+            btn.addEventListener('click', () => reaskWithFile(question, s.name));
+            btnRow.appendChild(btn);
+        });
+
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+        saveToCollectionsHistory(question, answerText, null, data.sources || []);
+        return;
+    }
+
+    // --- Plotly chart response ---
     const hasPlot = data.plot_graph || (data.response && data.response.includes('plotly'));
 
     if (hasPlot) {
@@ -503,28 +576,32 @@ async function sendCollectionsQuery() {
             </div>`;
         chatDiv.appendChild(assistantMsg);
 
-        // Use iframe to safely execute Plotly scripts
         const plotContainer = assistantMsg.querySelector('[id^="plot-container-"]');
         const iframe = document.createElement('iframe');
         iframe.style.cssText = 'width:100%;height:500px;border:none;border-radius:12px;display:block;';
-
         iframe.srcdoc = `<!DOCTYPE html><html><head><style>body{margin:0;padding:0;}</style></head><body>${plotContent}</body></html>`;
         plotContainer.appendChild(iframe);
 
         chatDiv.scrollTop = chatDiv.scrollHeight;
-        saveToCollectionsHistory(question, summary, plotContent);
+        saveToCollectionsHistory(question, summary, plotContent, data.sources || []);
         return;
     }
-    const answer = data.answer || data.response || data.error || 'No response.';
-    assistantMsg.innerHTML = `
-        <div style="background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;max-width:80%;font-size:15px;line-height:1.6;white-space:pre-wrap;">
-            ${answer}
-            ${sourcesHTML}
-        </div>`;
+
+    // --- Plain text response ---
+    const answer = (data.answer || data.response || data.error || 'No response.')
+        .replace(/^[ \t]+/gm, '').trim();
+    assistantMsg.innerHTML = `<div style="background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;max-width:80%;font-size:15px;line-height:1.6;white-space:pre-wrap;">${answer}${sourcesHTML}</div>`;
 
     chatDiv.appendChild(assistantMsg);
     chatDiv.scrollTop = chatDiv.scrollHeight;
-    saveToCollectionsHistory(question, data.answer || data.summary || '');
+    saveToCollectionsHistory(question, data.answer || data.summary || '', null, data.sources || []);
+}
+
+// Re-ask with a specific file when column is ambiguous (preserves active filter)
+function reaskWithFile(originalQuestion, fileName) {
+    const input = document.getElementById('collections-input');
+    input.value = `${originalQuestion} (use file: ${fileName})`;
+    sendCollectionsQuery();
 }
 
 function renderChart(chartId, rows) {
@@ -570,17 +647,23 @@ const collectionsHistory = [];
 
 async function loadCollectionsHistory() {
     try {
-        const res = await fetch('http://localhost:8000/collections/history');
+        const res = await fetch('http://localhost:8080/collections/history');
         const data = await res.json();
         if (data.history && data.history.length > 0) {
             data.history.forEach(entry => {
+                // Load full messages array (with plotHTML) if available, else reconstruct
+                const messages = (entry.messages && entry.messages.length > 0)
+                    ? entry.messages
+                    : [{ question: entry.question, answer: entry.answer, sources: entry.sources || [], plotHTML: null }];
                 collectionsHistory.push({
                     title: entry.title || entry.question,
                     question: entry.question,
                     answer: entry.answer,
                     timestamp: entry.timestamp,
                     id: entry.id,
-                    plotHTML: null 
+                    plotHTML: null,
+                    sources: entry.sources || [],
+                    messages
                 });
             });
             renderCollectionsHistory();
@@ -590,12 +673,29 @@ async function loadCollectionsHistory() {
     }
 }
 
-function saveToCollectionsHistory(question, answer, plotHTML = null) {
-    const entry = { 
+function saveToCollectionsHistory(question, answer, plotHTML = null, sources = []) {
+    // Append to the active chat session if one exists
+    if (activeHistoryEntryId !== null) {
+        const existing = collectionsHistory.find(e => e.id === activeHistoryEntryId);
+        if (existing) {
+            if (!existing.messages) {
+                existing.messages = [{ question: existing.question, answer: existing.answer, sources: existing.sources || [], plotHTML: existing.plotHTML || null }];
+            }
+            existing.messages.push({ question, answer, sources, plotHTML });
+            existing.answer = answer;
+            renderCollectionsHistory();
+            persistCollectionsHistory();
+            return;
+        }
+    }
+    // No active session — create a new one
+    const entry = {
         title: question,
-        question, 
-        answer, 
+        question,
+        answer,
         plotHTML,
+        sources,
+        messages: [{ question, answer, sources, plotHTML }],
         timestamp: new Date().toISOString(),
         id: Date.now()
     };
@@ -607,7 +707,7 @@ function saveToCollectionsHistory(question, answer, plotHTML = null) {
 
 async function persistCollectionsHistory() {
     try {
-        await fetch('http://localhost:8000/collections/history/save', {
+        await fetch('http://localhost:8080/collections/history/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ history: collectionsHistory })
@@ -702,7 +802,7 @@ async function deleteHistoryEntry(index) {
     renderCollectionsHistory();
     persistCollectionsHistory();
     try {
-        await fetch(`http://localhost:8000/collections/history/${entry.id}`, { method: 'DELETE' });
+        await fetch(`http://localhost:8080/collections/history/${entry.id}`, { method: 'DELETE' });
     } catch (e) {
         console.log('Could not delete from history:', e);
     }
@@ -723,55 +823,63 @@ async function renameHistoryEntry(index) {
     persistCollectionsHistory();
 }
 
+function buildRestoredSourcesHTML(sources) {
+    if (!sources || sources.length === 0) return '';
+    return `<details style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.15);padding-top:4px;"><summary style="font-size:11px;color:rgba(255,255,255,0.55);font-weight:700;letter-spacing:1px;cursor:pointer;outline:none;list-style:none;user-select:none;line-height:1.8;">SOURCES (${sources.length})</summary><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">${sources.map(s => `<span style="cursor:pointer;color:#ff6b6b;font-size:11px;text-decoration:underline;white-space:nowrap;" onclick="viewDocument('${s.path}', '${s.name}')">${s.name}</span>`).join('')}</div></details>`;
+}
+
+function formatAnswerHTML(raw) {
+    // Convert markdown-like syntax to HTML (same as live chat rendering)
+    return (raw || '')
+        .replace(/^[ \t]+/gm, '')
+        .trim()
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
+}
+
+function renderRestoredQA(chatDiv, question, answer, sources, plotHTML) {
+    const userMsg = document.createElement('div');
+    userMsg.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:20px;';
+    userMsg.innerHTML = `<div style="background:#e4002b;color:white;padding:15px 20px;border-radius:18px 18px 6px 18px;max-width:70%;font-size:15px;line-height:1.6;">${question}</div>`;
+    chatDiv.appendChild(userMsg);
+
+    const assistantMsg = document.createElement('div');
+    assistantMsg.style.cssText = 'display:flex;margin-bottom:20px;align-items:flex-start;width:90%;';
+    const restoredSourcesHTML = buildRestoredSourcesHTML(sources);
+
+    if (plotHTML) {
+        const innerDiv = document.createElement('div');
+        innerDiv.style.cssText = 'background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;font-size:15px;line-height:1.6;width:100%;';
+        innerDiv.innerHTML = `<div style="margin-bottom:12px;">${formatAnswerHTML(answer)}</div><div style="background:white;border-radius:12px;padding:8px;width:100%;min-height:500px;"></div>${restoredSourcesHTML}`;
+        assistantMsg.appendChild(innerDiv);
+        chatDiv.appendChild(assistantMsg);
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'width:100%;height:500px;border:none;border-radius:12px;display:block;';
+        iframe.srcdoc = `<!DOCTYPE html><html><head><style>body{margin:0;padding:0;}</style></head><body>${plotHTML}</body></html>`;
+        innerDiv.querySelectorAll('div')[1].appendChild(iframe);
+    } else {
+        const formattedAnswer = formatAnswerHTML(answer);
+        assistantMsg.innerHTML = `<div style="background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;max-width:80%;font-size:15px;line-height:1.6;">${formattedAnswer}${restoredSourcesHTML}</div>`;
+        chatDiv.appendChild(assistantMsg);
+    }
+}
+
 function restoreHistoryEntry(index) {
     const entry = collectionsHistory[index];
     activeHistoryEntryId = entry.id;
     const chatDiv = document.getElementById('main-content');
     chatDiv.innerHTML = '';
-    
-    // Set the main header title to match the entry title/question
     document.getElementById('main-title').textContent = entry.title || entry.question;
 
-    // Restore user message
-    const userMsg = document.createElement('div');
-    userMsg.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:20px;';
-    userMsg.innerHTML = `<div style="background:#e4002b;color:white;padding:15px 20px;border-radius:18px 18px 6px 18px;max-width:70%;font-size:15px;line-height:1.6;">${entry.question}</div>`;
-    chatDiv.appendChild(userMsg);
-
-    const assistantMsg = document.createElement('div');
-    assistantMsg.style.cssText = 'display:flex;margin-bottom:20px;align-items:flex-start;width:90%;';
-
-    // Restore chart if it existed
-    if (entry.plotHTML) {
-        const innerDiv = document.createElement('div');
-        innerDiv.style.cssText = 'background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;font-size:15px;line-height:1.6;width:100%;';
-        innerDiv.innerHTML = `
-            <div style="margin-bottom:12px;">${entry.answer}</div>
-            <div style="background:white;border-radius:12px;padding:8px;width:100%;min-height:500px;"></div>`;
-        assistantMsg.appendChild(innerDiv);
-        chatDiv.appendChild(assistantMsg);
-
-        const iframe = document.createElement('iframe');
-        iframe.style.cssText = 'width:100%;height:500px;border:none;border-radius:12px;display:block;';
-        iframe.srcdoc = `<!DOCTYPE html><html><head><style>body{margin:0;padding:0;}</style></head><body>${entry.plotHTML}</body></html>`;
-        innerDiv.querySelector('div:last-child').appendChild(iframe);
-    }
-    else {
-        assistantMsg.innerHTML = `
-            <div style="background:#00205b;color:white;padding:15px 20px;border-radius:18px 18px 18px 6px;max-width:80%;font-size:15px;line-height:1.6;white-space:pre-wrap;">
-                ${entry.answer}
-            </div>`;
-        chatDiv.appendChild(assistantMsg);
-    }
+    // Support both new multi-turn format (messages[]) and old single Q&A format
+    const messages = entry.messages || [{ question: entry.question, answer: entry.answer, sources: entry.sources || [], plotHTML: entry.plotHTML || null }];
+    messages.forEach(msg => renderRestoredQA(chatDiv, msg.question, msg.answer, msg.sources || [], msg.plotHTML || null));
 
     chatDiv.scrollTop = chatDiv.scrollHeight;
 
-    // Highlight active element in list
     document.querySelectorAll('#collections-history-list .chat-item').forEach(el => {
         el.classList.remove('active');
-        if (el.dataset.entryId == activeHistoryEntryId) {
-            el.classList.add('active');
-        }
+        if (el.dataset.entryId == activeHistoryEntryId) el.classList.add('active');
     });
 }
 

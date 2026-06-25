@@ -553,9 +553,21 @@ class HPGPTGraph:
                     "chatname": smart_title,
                 }
             await database.execute(query=query, values=values)
-            
-            self.save_data()            
+
+            self.save_data()
             logger.info(f"Created new session with smart title: {smart_title}")
+
+        # Ensure the chats row exists in Postgres even for sessions that were loaded
+        # from the JSON file after a DB restart (avoids foreign key failures on messages).
+        else:
+            await database.execute(
+                "INSERT INTO chats (chatid, userid, chatname) VALUES (:chatid, :userid, :chatname) ON CONFLICT (chatid) DO NOTHING",
+                {
+                    "chatid": session_id,
+                    "userid": user_id,
+                    "chatname": self.sessions[session_id].get("title", "Chat")
+                }
+            )
 
         # Check for stop request during streaming
         def check_should_stop():
@@ -564,19 +576,24 @@ class HPGPTGraph:
         # Handle greetings with agent-specific responses
         message_clean = message.lower().strip().rstrip('!?.')
         greetings  = ['hi', 'hello', 'hey', 'how are you', 'good morning', 'good afternoon', 'good evening']
-  
+
+        file_names = [f.get("name", "") for f in (files or []) if f.get("name")]
+
         if message_clean in greetings :
             quick_response ="👋 Hello! I'm your assistant for HPCL. Ask me anything!"
-               
+
             for word in quick_response.split():
                 if check_should_stop():
                     break
                 yield word + " "
                 await asyncio.sleep(0.02)
-            
+
             # Save to conversation history only if not stopped
             if not check_should_stop():
-                self.conversations[session_id].append({"msgid": user_msg_id, "role": "user", "content": message})
+                user_msg = {"msgid": user_msg_id, "role": "user", "content": message}
+                if file_names:
+                    user_msg["files"] = file_names
+                self.conversations[session_id].append(user_msg)
                 self.conversations[session_id].append({"msgid": assistant_msg_id, "role": "assistant", "content": quick_response})
                 self.sessions[session_id]["message_count"] += 2
                 self.sessions[session_id]["last_updated"] = datetime.now().isoformat()
@@ -599,11 +616,15 @@ class HPGPTGraph:
 
         # For non-greetings, use groq_client with agent-specific system prompt
         try:
+            # Persist uploaded files in session so follow-up questions reuse them
+            if files:
+                self.sessions[session_id]["uploaded_files"] = files
+            active_files = self.sessions[session_id].get("uploaded_files") or files or []
 
             state = {
                 "prompt": message,
                 "session_id": session_id,
-                "files": files,
+                "files": active_files,
                 "history": self.conversations.get(session_id, []),
                 "answer_mode": answer_mode,
                 "websocket": websocket,
@@ -624,7 +645,10 @@ class HPGPTGraph:
                             
             # Save conversation
             if not check_should_stop():
-                self.conversations[session_id].append({"msgid": user_msg_id, "role": "user", "content": message})
+                user_msg = {"msgid": user_msg_id, "role": "user", "content": message}
+                if file_names:
+                    user_msg["files"] = file_names
+                self.conversations[session_id].append(user_msg)
                 self.conversations[session_id].append({"msgid": assistant_msg_id,"role": "assistant", "content": complete_response})
                 self.sessions[session_id]["message_count"] += 2
                 self.sessions[session_id]["last_updated"] = datetime.now().isoformat()
@@ -661,8 +685,11 @@ class HPGPTGraph:
                 await asyncio.sleep(0.02)
             
             # Save error response to conversation history
-            if not check_should_stop():  
-                self.conversations[session_id].append({"msgid": user_msg_id, "role": "user", "content": message})
+            if not check_should_stop():
+                user_msg = {"msgid": user_msg_id, "role": "user", "content": message}
+                if file_names:
+                    user_msg["files"] = file_names
+                self.conversations[session_id].append(user_msg)
                 self.conversations[session_id].append({"msgid": assistant_msg_id, "role": "assistant", "content": error_response})
                 self.sessions[session_id]["message_count"] += 2
                 self.sessions[session_id]["last_updated"] = datetime.now().isoformat()

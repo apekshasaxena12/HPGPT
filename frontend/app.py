@@ -1,6 +1,6 @@
 from flask import Flask, request, redirect, url_for, render_template, send_from_directory, make_response  
 import os
-import json  # Add this import
+import json  
 from dotenv import load_dotenv
 from datetime import datetime
 import requests
@@ -29,7 +29,7 @@ def index_redirect():
 # === Public landing page ===
 @app.route('/homepage')
 def homepage():
-    return render_template('homepage.html')
+    return render_template('homepage.html', voice_bot_url=VOICE_BOT_URL, doc_gen_url=DOC_GEN_URL)
 # === Login route ===
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -40,7 +40,7 @@ def login():
     password = request.form.get('password')
 
     try:
-        response = requests.post("http://127.0.0.1:8000/login", data={
+        response = requests.post("http://127.0.0.1:8080/login", data={
             "username": username,
             "password": password
         })
@@ -53,7 +53,7 @@ def login():
                 print("✅ Login successful for userid:", userid)
 
                 session_response = requests.post(
-                    "http://127.0.0.1:8000/create-session",
+                    "http://127.0.0.1:8080/create-session",
                     data={"userid": userid},
                     headers={"User-Agent": request.headers.get("User-Agent")}
                 )
@@ -96,7 +96,7 @@ def index():
         return redirect(url_for('login'))
 
     try:
-        response = requests.get(f"http://127.0.0.1:8000/session-user/{login_session_id}")
+        response = requests.get(f"http://127.0.0.1:8080/session-user/{login_session_id}")
         if response.status_code == 200:
             userid = response.json().get("userid")
             print("✅ Logged in as userid:", userid)
@@ -128,7 +128,7 @@ def logout():
 
     if login_session_id:
         try:
-            requests.post("http://127.0.0.1:8000/logout-session", data={"session_id": login_session_id})
+            requests.post("http://127.0.0.1:8080/logout-session", data={"session_id": login_session_id})
         except:
             pass
 
@@ -151,7 +151,6 @@ def health_check():
         'backend': 'FastAPI'
     }
 
-<<<<<<< HEAD
 @app.route('/collections')
 def collections():
     login_session_id = request.cookies.get("login_session_id")
@@ -159,7 +158,5 @@ def collections():
         return redirect(url_for('login'))
     return render_template('collections.html')
 
-=======
->>>>>>> 487193b733e21d6c8a0b9b539cb79e6786f39b97
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

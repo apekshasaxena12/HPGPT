@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HPGPT - Your AI Assistant for HPCL</title>
+    <title>HPCL Access - Your AI Assistant for HPCL</title>
 
     <!-- Main CSS -->
     <link
@@ -30,7 +30,7 @@
     <!-- Navigation Bar -->
     <nav class="navbar">
       <div class="nav-left">
-        <span class="brand-name">HPGPT</span>
+        <span class="brand-name">HPCL Access</span>
       </div>
       <div class="nav-right">
         <a
@@ -55,19 +55,21 @@
     <div class="hero">
       <h1 class="main-title">
         <span>Welcome</span> <span>to</span><br />
-        <span>the</span> <span class="hp-highlight">HPGPT</span>
+        <span>the</span> <span class="hp-highlight">HPCL Access</span>
         <span>era</span>
       </h1>
 
       <p class="subtitle">
-        Your AI Assistant for HPCL. Upload Documents, ask questions or<br />
-        get help with analytics.
+        Your AI Assistant for HPCL.
       </p>
 
-      <div class="buttons">
-        <a href="{{ url_for('login') }}" class="btn login-btn">Login</a>
-        <a href="{{ url_for('signup') }}" class="btn signup-btn">Sign Up</a>
+      <div class="product-buttons">
+        <a href="{{ url_for('login') }}" class="product-btn">HPGPT</a>
+        <a href="#" class="product-btn">Employee Assistant</a>
+        <a href="{{ voice_bot_url }}" target="_blank" rel="noopener noreferrer" class="product-btn">Voice Chat</a>
+        <a href="{{ doc_gen_url }}" target="_blank" rel="noopener noreferrer" class="product-btn">Document Generator</a>
       </div>
+
     </div>
 
     <!-- JavaScript -->
